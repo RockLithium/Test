@@ -547,22 +547,31 @@
                 
                 if (isExponentMode) {
                     let exp = parseInt(value);
-                    if (isNaN(exp)) exp = MIN_EXPONENT;
-                    exp = Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, exp));
-                    exponentInput.value = exp; // 更新 UI if clamped
+                    。
+                    if (isNaN(exp) || value.trim() === '') {
+                        limit = (1n << BigInt(currentExponent)); 
+                        return limit; 
+                    }
                     
-                    currentExponent = exp; // 保存有效的 N 值
-                    limit = (1n << BigInt(exp));
+                    let clampedExp = Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, exp));
+                    
+                    currentExponent = clampedExp; 
+                    
+                    if (exp !== clampedExp || exp.toString() !== exponentInput.value) {
+                        exponentInput.value = clampedExp;
+                    }
+
+                    limit = (1n << BigInt(currentExponent));
                     
                 } else {
                     try {
-                        // 将输入字符串中的逗号移除并尝试转换为 BigInt
                         limit = BigInt(value.replace(/,/g, ''));
                     } catch (e) {
-                        limit = 2n; 
+                        // 如果解析失败（如空字符串），使用最小安全值 1n
+                        limit = 1n; 
                     }
                     
-                    // 删除了 if (limit < 2n) limit = 2n; 这一行！
+                    if (limit < 1n) limit = 1n;
                     
                     if (limit > MAX_LIMIT_BIGINT) {
                         limit = MAX_LIMIT_BIGINT;
@@ -570,6 +579,7 @@
                     
                     exponentInput.value = limit.toLocaleString();
                 }
+                
                 return limit;
             }
 
