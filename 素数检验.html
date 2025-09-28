@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>多核质数查找器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        /* --- 字体规范：中文-苹方, 英文/数字-Ubuntu Mono --- */
+        body {
+            /* 默认使用苹方（中文） */
+            font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #1a1a1a; 
+            color: #d3d3d3; 
+        }
+        
+        /* 强制 Ubuntu Mono 用于所有数字/代码/状态值 */
+        .value, 
+        #workerCountInput, 
+        #exponentInput,
+        .core-p-value, 
+        #currentProgress,
+        .progress-fill {
+            font-family: 'Ubuntu Mono', Consolas, monospace !important;
+        }
+
+        /* 用于计时器和进度条中的数字 */
+        .monospace-value {
+             font-family: 'Ubuntu Mono', Consolas, monospace !important;
+        }
+        
+        /* 确保当前阶段名称使用中文默认字体 */
+        .stage-value {
+            color: #90ee90;
+            font-weight: bold;
+            font-family: 'PingFang SC', 'Helvetica Neue', sans-serif !important;
+        }
+
+        /* 返回主页按钮样式 */
+        #homeButton {
+            position: absolute; /* 绝对定位 */
+            top: 20px;
+            left: 20px;
+            padding: 10px 15px;
+            font-size: 0.9em;
+            color: #e0e0e0; /* 保持与主页颜色一致 */
+            background-color: #333333;
+            border: 1px solid #778899;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background-color 0.3s;
+            z-index: 100; /* 确保按钮在最上层 */
+        }
+
+        #homeButton:hover {
+            background-color: #444444;
+        }
+
+        h1 {
+            color: #aae0e0; 
+            text-shadow: 0 0 5px rgba(170, 224, 224, 0.3); 
+            font-weight: 900; 
+        }
+        
+        #controls {
+            margin-bottom: 25px;
+            background: rgba(40, 40, 40, 0.8); 
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #778899;
+            text-align: center;
+            width: 95%; 
+            max-width: 500px; 
+        }
+
+        #configGroup {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .config-line {
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             gap: 10px;
+             margin-bottom: 5px;
+        }
+        
+        #exponentGroup {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #workerCountInput, #exponentInput {
+            background: #333333;
+            color: #d3d3d3;
+            border: 1px solid #778899;
+            padding: 5px;
+            width: 80px; 
+            border-radius: 3px;
+            text-align: center;
+        }
+        
+        #exponentInput.numerical {
+             width: 120px; 
+        }
+        
+        #modeSwitchButton {
+            padding: 5px 10px;
+            font-size: 0.9em;
+            background-color: #555555;
+            color: #d3d3d3;
+            border: 1px solid #778899;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        #modeSwitchButton:hover {
+            background-color: #666666;
+        }
+
+        #limitDisplay {
+            color: #90ee90;
+            font-weight: bold;
+            font-size: 1.1em; 
+            text-align: center; 
+            margin-top: 5px; 
+            min-height: 20px;
+        }
+
+        #stageButton {
+            padding: 10px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            color: #e0e0e0;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+            font-family: 'PingFang SC', 'Helvetica Neue', sans-serif;
+        }
+        
+        #stageButton.start-btn {
+            background-color: #40a0a0; 
+        }
+        #stageButton.stop-btn {
+            background-color: #cc6666; 
+        }
+
+        #stageMessage {
+            color: #778899; 
+            min-height: 40px; 
+            padding: 5px 0;
+            margin: 0;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            word-wrap: break-word;
+        }
+
+        #statusArea {
+            width: 95%; 
+            max-width: 1200px;
+            margin-top: 15px;
+            padding: 20px;
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 10px;
+        }
+        
+        .status-line {
+            margin: 10px 0;
+            font-size: 1.1em;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .value {
+            color: #90ee90; 
+            font-weight: bold;
+        }
+
+        /* 总进度条 */
+        .progress-bar-container {
+            height: 12px;
+            background-color: #333333;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 5px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #40e0d0; 
+            line-height: 12px;
+            color: #1a1a1a;
+            font-size: 0.7em;
+            text-align: center;
+            transition: width 0.1s ease-out;
+        }
+        
+        #coreProgress {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px dashed #444444;
+        }
+        
+        #coreStatusContainers {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        /* 核心状态卡片固定宽高，只显示数字 */
+        .core-status {
+            padding: 8px;
+            border: 1px solid #383838;
+            border-radius: 5px;
+            background: rgba(50, 50, 50, 0.6); 
+            height: 50px; 
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .core-label {
+            font-weight: bold;
+            color: #aae0e0; 
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 0.9em;
+        }
+        
+        .core-p-value {
+            color: #90ee90; 
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* 结果下载区域 */
+        #resultArea {
+            width: 95%; 
+            max-width: 1200px;
+            margin-top: 15px;
+            padding: 20px;
+            background: rgba(40, 40, 40, 0.8);
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        #downloadButton {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            background-color: #40a0a0;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body onload="initializeUI()">
+
+    <a href="index.html" id="homeButton">← 返回项目选择主页</a>
+
+    <h1>多核质数查找器</h1>
+
+    <div id="controls">
+        <div id="configGroup">
+            <div class="config-line">
+                <label for="workerCountInput" style="color: #aae0e0;">指定核心数：</label>
+                <input type="number" id="workerCountInput" min="1" max="4" value="4">
+            </div>
+            <span id="autoDetectHint" style="font-size: 0.8em; color: #778899; margin-bottom: 10px;"></span>
+
+            <div class="config-line" id="exponentGroup">
+                <label id="limitLabel" style="color: #aae0e0;">质数查找上限 (2^N), N=</label>
+                <input type="number" id="exponentInput" value="24">
+                <button id="modeSwitchButton" onclick="window.toggleMode()">切换模式</button>
+            </div>
+            <span id="limitDisplay"></span>
+        </div>
+        
+        <button id="stageButton" class="start-btn" onclick="window.handleStageControl()">开始计算</button>
+        <p id="stageMessage"></p>
+    </div>
+    
+    <div id="statusArea">
+        <div class="status-line">
+            <span>当前阶段：</span>
+            <span id="currentStage" class="stage-value">等待配置</span>
+        </div>
+        <div class="status-line">
+            <span>累计已用时间：</span>
+            <span id="elapsedTime">0.000s</span>
+        </div>
+        <div class="status-line">
+            <span id="progressLabel">总进度:</span>
+            <span id="currentProgress" class="value">0 / 0</span>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+
+        <div id="coreProgress">
+            <h3 style="color: #40e0d0; margin-top: 5px;">核心实时状态</h3>
+            <div id="coreStatusContainers"></div>
+        </div>
+    </div>
+
+    <div id="resultArea" style="display: none;">
+        <h3 style="color: #40e0d0; text-align: center;">计算任务完成</h3>
+        <p id="resultSummary"></p>
+        <button id="downloadButton" onclick="window.downloadPrimes()">下载质数列表 (.txt)</button>
+    </div>
+
+
+    <script>
+        (function() {
+            // --- 常量设置 ---
+            const MIN_EXPONENT = 1; 
+            const MAX_EXPONENT = 64;
+            const DEFAULT_EXPONENT = 24; 
+            const BATCH_MULTIPLIER = 97; 
+            const MAX_LIMIT_BIGINT = 1n << 64n;
+            
+            // --- DOM 元素引用 ---
+            const stageButton = document.getElementById('stageButton');
+            const stageMessage = document.getElementById('stageMessage');
+            const currentProgress = document.getElementById('currentProgress');
+            const progressFill = document.getElementById('progressFill');
+            const autoDetectHint = document.getElementById('autoDetectHint');
+            const coreStatusContainers = document.getElementById('coreStatusContainers');
+            const workerCountInput = document.getElementById('workerCountInput');
+            const elapsedTimeDisplay = document.getElementById('elapsedTime');
+            const progressLabel = document.getElementById('progressLabel');
+            const exponentInput = document.getElementById('exponentInput');
+            const limitDisplay = document.getElementById('limitDisplay');
+            const currentStageDisplay = document.getElementById('currentStage');
+            const resultArea = document.getElementById('resultArea');
+            const resultSummary = document.getElementById('resultSummary');
+            const limitLabel = document.getElementById('limitLabel');
+            const modeSwitchButton = document.getElementById('modeSwitchButton');
+
+            // --- 状态变量 ---
+            let SYSTEM_CORE_COUNT = navigator.hardwareConcurrency || 4;
+            let WORKER_COUNT = SYSTEM_CORE_COUNT;
+            
+            let STAGE_MAX_NUMBER = BigInt(0); 
+            let workers = [];
+            let currentStageIndex = 0; 
+            let isRunning = false;
+            
+            let startTime = 0;        
+            let totalTimeElapsed = 0; 
+            let timerInterval = null;
+            let searchEndAbsoluteTime = 0; 
+
+            let totalChecks = BigInt(0); 
+            let checksCompleted = 0n; 
+            let foundPrimes = new Set(); 
+            let coreStatuses = []; 
+            
+            let isExponentMode = true; 
+            let currentExponent = DEFAULT_EXPONENT;
+
+
+            // --- Worker Script (Miller-Rabin) ---
+            function getWorkerScript() {
+                return `
+                    let isWorkerRunning = false;
+                    let workerId = -1;
+                    let BATCH_SIZE_N = 1n; 
+
+                    self.onmessage = function(e) {
+                        if (e.data.command === 'stop') {
+                            isWorkerRunning = false;
+                        } else if (e.data.command === 'start_miller_rabin_step') {
+                            isWorkerRunning = true;
+                            workerId = e.data.workerId;
+                            BATCH_SIZE_N = BigInt(e.data.batch_size); 
+                            runMillerRabinStep(
+                                BigInt(e.data.start_num), 
+                                BigInt(e.data.max_num), 
+                                BigInt(e.data.step)
+                            );
+                        }
+                    };
+                    
+                    function power(base, exp, mod) {
+                        let res = 1n;
+                        base %= mod;
+                        while (exp > 0n) {
+                            if (exp % 2n === 1n) res = (res * base) % mod;
+                            base = (base * base) % mod;
+                            exp /= 2n;
+                        }
+                        return res;
+                    }
+
+                    function millerRabin(n, a) {
+                        if (n === a) return true;
+                        if (n % a === 0n) return false;
+
+                        let d = n - 1n;
+                        while (d % 2n === 0n) d /= 2n;
+
+                        let x = power(a, d, n);
+                        if (x === 1n || x === n - 1n) return true;
+
+                        while (d !== n - 1n) {
+                            x = (x * x) % n;
+                            d *= 2n;
+                            if (x === 1n) return false; 
+                            if (x === n - 1n) return true; 
+                        }
+                        return false; 
+                    }
+
+                    const bases = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n];
+
+                    function isBigIntPrime(n) {
+                        if (n <= 1n) return false;
+                        
+                        for (const a of bases) {
+                            if (n === a) return true;
+                            if (!millerRabin(n, a)) return false;
+                        }
+                        return true;
+                    }
+
+                    function runMillerRabinStep(startNum, maxNum, step) {
+                        let primes = [];
+                        let checksInBatch = 0n; 
+                        
+                        for (let n = startNum; n <= maxNum && isWorkerRunning; n += step) {
+                            
+                            checksInBatch += 1n; 
+
+                            if (isBigIntPrime(n)) {
+                                primes.push(n.toString());
+                            }
+
+                            if (checksInBatch >= BATCH_SIZE_N) {
+                                self.postMessage({ 
+                                    command: 'progress_miller_rabin', 
+                                    workerId: workerId,
+                                    current_num: n.toString(),
+                                    checks_done: checksInBatch.toString() 
+                                });
+                                checksInBatch = 0n; 
+                            }
+                        }
+                        
+                        if (isWorkerRunning) {
+                            self.postMessage({
+                                command: 'finished_step',
+                                workerId: workerId,
+                                checks_done: checksInBatch.toString(), 
+                                primes: primes
+                            });
+                        }
+                        
+                        self.postMessage({ command: 'task_complete', workerId: workerId });
+                    }
+                `;
+            }
+
+            // --- 辅助函数：随机打乱数组 ---
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+
+            // --- UI 和模式控制 ---
+            
+            window.toggleMode = function() {
+                // 1. 获取当前的最终上限值（无论当前是哪种模式）
+                const currentLimitBigInt = parseLimitInput(exponentInput.value); 
+
+                isExponentMode = !isExponentMode;
+                
+                if (isExponentMode) {
+                    // 2. 切换到 EXPONENT mode (2^N)
+                    limitLabel.textContent = '质数查找上限 (2^N), N=';
+                    exponentInput.type = 'number';
+                    exponentInput.classList.remove('numerical');
+                    exponentInput.min = MIN_EXPONENT;
+                    exponentInput.max = MAX_EXPONENT;
+
+                    // 3. 计算并设置 N 值 (实现继承逻辑)
+                    let newExp = 0;
+                    if (currentLimitBigInt > 0n) {
+                        // 使用当前 BigInt 上限计算 N (取对数并四舍五入)
+                        let tempLimit = Number(currentLimitBigInt); 
+                        if (tempLimit > 0) {
+                             newExp = Math.round(Math.log2(tempLimit));
+                        } else {
+                             newExp = currentExponent;
+                        }
+                        
+                        newExp = Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, newExp));
+                    } else {
+                         newExp = currentExponent;
+                    }
+                    
+                    currentExponent = newExp; // 更新 N 状态
+                    exponentInput.value = currentExponent; // 设置输入框 N 值
+                    
+                } else {
+                    // 2. 切换到 NUMERICAL mode (Value)
+                    limitLabel.textContent = '质数查找上限 (数值)=';
+                    exponentInput.type = 'text'; 
+                    exponentInput.classList.add('numerical');
+                    exponentInput.min = null;
+                    exponentInput.max = null;
+
+                    // 3. 设置数值
+                    exponentInput.value = currentLimitBigInt.toLocaleString();
+                }
+                
+                window.updateLimitDisplay(); 
+            }
+
+            function parseLimitInput(value) {
+                let limit = 0n;
+                
+                if (isExponentMode) {
+                    let exp = parseInt(value);
+                    if (isNaN(exp)) exp = MIN_EXPONENT;
+                    exp = Math.min(MAX_EXPONENT, Math.max(MIN_EXPONENT, exp));
+                    exponentInput.value = exp; // 更新 UI if clamped
+                    
+                    currentExponent = exp; // 保存有效的 N 值
+                    limit = (1n << BigInt(exp));
+                    
+                } else {
+                    try {
+                        limit = BigInt(value.replace(/,/g, ''));
+                    } catch (e) {
+                        limit = 2n; 
+                    }
+                    
+                    if (limit < 2n) limit = 2n;
+                    
+                    if (limit > MAX_LIMIT_BIGINT) {
+                         limit = MAX_LIMIT_BIGINT;
+                    }
+                    
+                    exponentInput.value = limit.toLocaleString();
+                }
+                return limit;
+            }
+
+            window.updateLimitDisplay = function() {
+                STAGE_MAX_NUMBER = parseLimitInput(exponentInput.value);
+                
+                // 修正 totalChecks 数量
+                if (STAGE_MAX_NUMBER >= 3n) {
+                    totalChecks = (STAGE_MAX_NUMBER - 1n) / 2n + 1n;
+                } else if (STAGE_MAX_NUMBER === 2n) {
+                    totalChecks = 1n;
+                } else {
+                    totalChecks = 0n;
+                }
+                
+                const formattedLimit = STAGE_MAX_NUMBER.toLocaleString('en-US', {useGrouping: true});
+                
+                let modeText = isExponentMode ? `(2^${currentExponent})` : `(数值)`;
+                
+                limitDisplay.innerHTML = `上限 ${modeText}：<span class="value">${formattedLimit}</span>`;
+                
+                const totalCores = WORKER_COUNT;
+                
+                if (!isRunning) {
+                     stageMessage.textContent = `点击“开始计算”：将使用 ${totalCores} 个核心并行测试 2 到 ${formattedLimit} 的所有数字。`;
+                }
+
+                if (!isRunning) {
+                    updateOverallProgress();
+                }
+            }
+            
+            window.updateWorkerCountInput = function() {
+                const maxCores = SYSTEM_CORE_COUNT;
+                workerCountInput.max = maxCores;
+                
+                let requestedCount = parseInt(workerCountInput.value);
+                
+                requestedCount = Math.max(1, requestedCount);
+
+                if (requestedCount > maxCores) {
+                    requestedCount = maxCores;
+                    workerCountInput.value = maxCores;
+                }
+                
+                WORKER_COUNT = requestedCount;
+                if (!isRunning) {
+                    initializeCoreStatusContainers(WORKER_COUNT);
+                    window.updateLimitDisplay(); 
+                }
+            }
+
+            function updateButtonUI() {
+                if (currentStageIndex === 0 || currentStageIndex === 2) {
+                    stageButton.textContent = '开始计算';
+                    stageButton.classList.remove('stop-btn');
+                    stageButton.classList.add('start-btn');
+                    stageButton.disabled = false; 
+                    workerCountInput.disabled = false;
+                    exponentInput.disabled = false;
+                    modeSwitchButton.disabled = false;
+                } else if (currentStageIndex === 1 || currentStageIndex === 1.5) {
+                    stageButton.textContent = '停止计算';
+                    stageButton.classList.remove('start-btn');
+                    stageButton.classList.add('stop-btn');
+                    stageButton.disabled = false; 
+                    workerCountInput.disabled = true;
+                    exponentInput.disabled = true;
+                    modeSwitchButton.disabled = true;
+                } 
+            }
+            
+            window.initializeUI = function() {
+                workerCountInput.value = SYSTEM_CORE_COUNT;
+                // 监听输入变化
+                workerCountInput.oninput = window.updateWorkerCountInput; 
+                exponentInput.oninput = window.updateLimitDisplay; 
+                
+                // 核心修正：明确设置初始为指数模式 N=24
+                isExponentMode = true; 
+                currentExponent = DEFAULT_EXPONENT; // 24
+                
+                limitLabel.textContent = '质数查找上限 (2^N), N=';
+                exponentInput.type = 'number';
+                exponentInput.classList.remove('numerical');
+                exponentInput.min = MIN_EXPONENT;
+                exponentInput.max = MAX_EXPONENT;
+                exponentInput.value = currentExponent; // 设置 N=24
+                
+                autoDetectHint.textContent = `(系统检测到 ${SYSTEM_CORE_COUNT} 个核心)`;
+                
+                // 渲染 UI (会调用 updateLimitDisplay 和 initializeCoreStatusContainers)
+                window.updateWorkerCountInput(); 
+            }
+
+            function initializeCoreStatusContainers(count) {
+                if (coreStatusContainers.children.length !== count) {
+                    coreStatusContainers.innerHTML = '';
+                    for (let i = 0; i < count; i++) {
+                        const statusDiv = document.createElement('div');
+                        statusDiv.className = 'core-status';
+                        statusDiv.id = `core-${i}`;
+                        statusDiv.innerHTML = `
+                            <div class="core-label">
+                                <span>核心 ${i + 1}: <span class="core-p-value">N/A</span></span>
+                            </div>
+                        `;
+                        coreStatusContainers.appendChild(statusDiv);
+                    }
+                }
+                
+                while (coreStatuses.length < count) {
+                     coreStatuses.push({ id: coreStatuses.length, currentP: 'N/A', isFinished: false });
+                }
+                if (coreStatuses.length > count) {
+                    coreStatuses.splice(count);
+                }
+                
+                coreStatuses.forEach((_, i) => updateCoreStatusUI(i));
+            }
+            
+            // --- 绝对计时器逻辑 ---
+
+            function startTimer() {
+                if (timerInterval) clearInterval(timerInterval);
+                
+                if (startTime === 0) {
+                     startTime = Date.now();
+                }
+                timerInterval = setInterval(updateElapsedTime, 10); 
+            }
+
+            function stopTimer() {
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                updateElapsedTime(true); 
+            }
+
+            function updateElapsedTime(isFinal = false) {
+                if (startTime === 0) return;
+                
+                const now = Date.now();
+                
+                const elapsed = now - startTime; 
+                totalTimeElapsed = elapsed; 
+                
+                const formattedTime = (totalTimeElapsed / 1000).toFixed(3);
+                
+                if (isRunning || isFinal) {
+                    elapsedTimeDisplay.innerHTML = `<span class="monospace-value">${formattedTime}s</span>`;
+                }
+            }
+            
+            // --- 阶段/进度更新 ---
+            
+            function updateOverallProgress() {
+                let progressPercentage = 0;
+                let currentCountStr = checksCompleted.toLocaleString();
+                let totalCountStr = totalChecks.toLocaleString();
+
+                if (currentStageIndex === 1) {
+                    currentStageDisplay.textContent = '并行查找 (Miller-Rabin)'; 
+                    
+                    if (totalChecks > 0n) {
+                        progressPercentage = Math.min(100, (Number(checksCompleted * 10000n / totalChecks) / 100)); 
+                    } else {
+                         progressPercentage = 100;
+                    }
+
+                    progressLabel.textContent = `已检查数字量 (总 ${totalCountStr}):`; 
+                } else if (currentStageIndex === 1.5) {
+                    currentStageDisplay.textContent = '快速排序'; 
+                    progressPercentage = 100; 
+                    progressLabel.textContent = `查找阶段已完成 (总 ${totalCountStr}):`;
+                } else if (currentStageIndex === 2) {
+                    currentStageDisplay.textContent = '已完成';
+                    progressLabel.textContent = `查找阶段已完成 (总 ${totalCountStr}):`;
+                    progressPercentage = 100;
+                } else {
+                    currentStageDisplay.textContent = '等待配置';
+                    progressLabel.textContent = `总进度:`;
+                }
+                
+                currentProgress.textContent = `${currentCountStr} / ${totalCountStr}`;
+                progressFill.style.width = progressPercentage.toFixed(2) + '%';
+                progressFill.textContent = progressPercentage.toFixed(2) + '%';
+            }
+
+            function handleWorkerMessage(e) {
+                const data = e.data;
+                const workerId = data.workerId;
+                
+                if (data.command === 'progress_miller_rabin') {
+                    if (currentStageIndex !== 1) return;
+                    
+                    checksCompleted += BigInt(data.checks_done);
+                    
+                    coreStatuses[workerId].currentP = data.current_num.toLocaleString();
+                    updateOverallProgress(); 
+                    updateCoreStatusUI(workerId);
+
+                } else if (data.command === 'finished_step') {
+                    if (currentStageIndex !== 1) return;
+
+                    checksCompleted += BigInt(data.checks_done);
+                    data.primes.map(p => foundPrimes.add(BigInt(p)));
+                    
+                    updateOverallProgress();
+
+                    coreStatuses[workerId].currentP = `Finished (Primes: ${data.primes.length})`;
+                    coreStatuses[workerId].isFinished = true;
+                    updateCoreStatusUI(workerId);
+                    
+                } else if (data.command === 'task_complete') {
+                    checkAllWorkersFinished();
+                }
+            }
+            
+            function checkAllWorkersFinished() {
+                if (currentStageIndex !== 1) return;
+                
+                let allFinished = coreStatuses.every(s => s.isFinished);
+
+                if (allFinished) {
+                    workers.forEach(w => w.terminate());
+                    workers = [];
+                    searchEndAbsoluteTime = Date.now(); 
+                    startSortStage();
+                }
+            }
+
+            function updateCoreStatusUI(workerId) {
+                const status = coreStatuses[workerId];
+                const coreElement = document.getElementById(`core-${workerId}`);
+                if (!coreElement) return;
+
+                const pValueSpan = coreElement.querySelector('.core-p-value');
+                
+                const isFinished = status.isFinished;
+                const pValueColor = isFinished ? '#778899' : '#90ee90';
+                
+                pValueSpan.textContent = status.currentP;
+                pValueSpan.style.color = pValueColor;
+
+                if (isFinished) {
+                    coreElement.classList.add('completed');
+                } else {
+                    coreElement.classList.remove('completed');
+                }
+            }
+
+            function fullReset() {
+                startTime = 0; 
+                totalTimeElapsed = 0;
+                searchEndAbsoluteTime = 0; 
+                checksCompleted = 0n;
+                foundPrimes = new Set(); 
+                coreStatuses.forEach(s => { s.currentP = 'N/A'; s.isFinished = false; });
+                coreStatuses.forEach(s => updateCoreStatusUI(s.id));
+
+                elapsedTimeDisplay.innerHTML = `<span class="monospace-value">0.000s</span>`;
+                resultArea.style.display = 'none';
+                updateOverallProgress();
+            }
+
+            // --- 核心阶段函数 ---
+
+            function startSearch() {
+                if (isRunning) return;
+                
+                fullReset(); 
+
+                isRunning = true;
+                startTimer(); 
+                
+                currentStageIndex = 1; 
+                updateButtonUI(); 
+                
+                // 启动提示
+                const formattedLimit = STAGE_MAX_NUMBER.toLocaleString('en-US', {useGrouping: true});
+                stageMessage.textContent = `正在并行测试 2 到 ${formattedLimit} 的所有数字`;
+
+                // 预置质数 2 并计入检查数
+                if (STAGE_MAX_NUMBER >= 2n) {
+                    foundPrimes.add(2n);
+                    checksCompleted += 1n; 
+                }
+                updateOverallProgress();
+
+                const maxNum = STAGE_MAX_NUMBER;
+                const startNum = 3n; 
+                const step = BigInt(WORKER_COUNT) * 2n; 
+                // 批量步长使用 SYSTEM_CORE_COUNT 
+                const BATCH_SIZE_N = BigInt(SYSTEM_CORE_COUNT) * BigInt(BATCH_MULTIPLIER);
+                
+                // 1. 生成所有奇数起始点 
+                const startingOddNumbers = [];
+                for (let i = 0; i < WORKER_COUNT; i++) {
+                    let workerStart = startNum + BigInt(i) * 2n;
+                    if (workerStart <= maxNum) {
+                         startingOddNumbers.push(workerStart);
+                    }
+                }
+                
+                // 2. 随机打乱起始点
+                shuffleArray(startingOddNumbers);
+
+                // 3. 启动 Worker
+                workers.forEach(w => {try{w.terminate()}catch(e){/*ignore*/}});
+                workers = [];
+                initializeCoreStatusContainers(WORKER_COUNT); // 确保在启动前再次初始化
+
+                for (let i = 0; i < WORKER_COUNT; i++) {
+                    let workerStart = startingOddNumbers[i]; 
+
+                    if (!workerStart) {
+                        coreStatuses[i].currentP = `Queue Empty`;
+                        coreStatuses[i].isFinished = true;
+                        updateCoreStatusUI(i);
+                        continue;
+                    }
+
+                    const worker = new Worker(URL.createObjectURL(new Blob([getWorkerScript()])));
+                    worker.onmessage = handleWorkerMessage;
+                    workers.push(worker);
+                    
+                    coreStatuses[i].currentP = workerStart.toLocaleString(); 
+                    coreStatuses[i].isFinished = false;
+                    updateCoreStatusUI(i);
+
+                    workers[i].postMessage({
+                        command: 'start_miller_rabin_step',
+                        workerId: i,
+                        start_num: workerStart.toString(),
+                        max_num: maxNum.toString(),
+                        step: step.toString(),
+                        batch_size: BATCH_SIZE_N.toString()
+                    });
+                }
+                
+                checkAllWorkersFinished(); 
+            }
+
+            function startSortStage() {
+                currentStageIndex = 1.5; 
+                
+                // 强制更新 UI 到排序阶段
+                updateOverallProgress(); 
+                updateButtonUI(); 
+                stageMessage.textContent = '计算中…… (正在快速排序)';
+
+                // 同步执行排序
+                const sortStart = Date.now();
+                const finalPrimesArray = Array.from(foundPrimes);
+                finalPrimesArray.sort((a, b) => (a < b ? -1 : (a > b ? 1 : 0))); 
+                const sortEnd = Date.now();
+                
+                window.finalPrimesArray = finalPrimesArray;
+                
+                finishFinalStage(sortEnd - sortStart);
+            }
+            
+            function finishFinalStage(sortTimeElapsed) {
+                stopTimer(); 
+                isRunning = false;
+                currentStageIndex = 2; 
+                
+                updateElapsedTime(true); 
+
+                const totalPrimes = window.finalPrimesArray.length;
+                const finalTime = totalTimeElapsed; // 毫秒
+                
+                const searchTimeElapsed = (searchEndAbsoluteTime - startTime); 
+
+                // 结果总结格式
+                resultSummary.textContent = `共发现 ${totalPrimes.toLocaleString()} 个质数，总耗时 ${(finalTime / 1000).toFixed(3)} 秒。查找耗时 ${(searchTimeElapsed / 1000).toFixed(3)} 秒，排序耗时 ${(sortTimeElapsed / 1000).toFixed(3)} 秒。`;
+                resultArea.style.display = 'block';
+
+                stageMessage.textContent = `✅ 计算任务已完成！结果已准备好下载。`;
+                updateOverallProgress(); 
+                updateButtonUI(); 
+            }
+
+            function stopStressTest() {
+                if (!isRunning) return;
+
+                isRunning = false;
+                currentStageIndex = 0; 
+                
+                workers.forEach(worker => {
+                    try { worker.postMessage({ command: 'stop' }); worker.terminate(); } catch (e) { /* ignore */ }
+                });
+                workers = []; 
+
+                stopTimer(); 
+                
+                const frozenTime = (totalTimeElapsed / 1000).toFixed(3);
+                
+                // 确保 "已停止" 使用中文默认字体
+                elapsedTimeDisplay.innerHTML = `<span class="monospace-value">${frozenTime}s</span> (已停止)`; 
+
+                workerCountInput.disabled = false;
+                exponentInput.disabled = false;
+                modeSwitchButton.disabled = false;
+
+                stageMessage.textContent = '程序已停止。您可以修改配置后再次点击“开始计算”。';
+                updateButtonUI(); 
+            }
+
+            window.handleStageControl = function() {
+                if (currentStageIndex === 1 || currentStageIndex === 1.5) {
+                    stopStressTest();
+                } else if (currentStageIndex === 0 || currentStageIndex === 2) {
+                    // 确保使用最新的配置开始计算
+                    window.updateLimitDisplay(); 
+                    startSearch(); 
+                }
+            }
+            
+            window.downloadPrimes = function() {
+                const primesToDownload = window.finalPrimesArray || Array.from(foundPrimes).sort((a, b) => (a < b ? -1 : (a > b ? 1 : 0)));
+
+                if (primesToDownload.length === 0) {
+                    alert('没有质数可以下载。');
+                    return;
+                }
+                
+                const content = primesToDownload.map(p => p.toString()).join(' ');
+                
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `primes_up_to_${STAGE_MAX_NUMBER.toLocaleString('en-US')}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            }
+
+        })();
+    </script>
+</body>
+</html>
