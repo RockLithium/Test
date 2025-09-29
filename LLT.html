@@ -255,7 +255,7 @@
     <div id="controls">
         <div id="configGroup">
             <div class="config-line">
-                <label for="workerCountInput" style="color: #aae0e0;">指定核心数：</label>
+                <label for="workerCountInput" style="color: #aae0e0;">指定线程数：</label>
                 <input type="number" id="workerCountInput" min="1" max="4" value="4">
             </div>
             <span id="autoDetectHint" style="font-size: 0.8em; color: #778899; margin-bottom: 10px;"></span>
@@ -301,7 +301,7 @@
         </div>
 
         <div id="coreProgress">
-            <h3 style="color: #40e0d0; margin-top: 5px;"><span id="coreCountDisplay">4</span> 核心 LLT 实时状态</h3>
+            <h3 style="color: #40e0d0; margin-top: 5px;">线程 LLT 实时状态</h3>
             <div id="coreStatusContainers"></div>
         </div>
     </div>
@@ -324,7 +324,6 @@
         const workerCountInput = document.getElementById('workerCountInput');
         const elapsedTimeDisplay = document.getElementById('elapsedTime');
         const progressLabel = document.getElementById('progressLabel');
-        const coreCountDisplay = document.getElementById('coreCountDisplay');
         const cycleCountDisplay = document.getElementById('cycleCount');
         const exponentInput = document.getElementById('exponentInput');
         const limitDisplay = document.getElementById('limitDisplay');
@@ -393,7 +392,6 @@
                     responsive: true,
                     maintainAspectRatio: false, 
                     animation: {
-                        // 初始动画可以保留，但后续的 update 将使用 'none'
                         duration: 500, 
                         easing: 'linear'
                     },
@@ -469,21 +467,13 @@
                 exp = DEFAULT_EXPONENT;
             }
 
-            // 核心逻辑：计算时仍进行上下限钳制
             const clampedExp = Math.max(MIN_EXPONENT, Math.min(exp, MAX_EXPONENT)); 
             
-            // **FIX 2:** 移除限制输入框的逻辑，仅钳制计算使用的值
-            /* if (exp < MIN_EXPONENT) {
-                exponentInput.value = MIN_EXPONENT; 
-            }
-            */
-
             currentExponent = clampedExp; 
             STAGE_MAX_NUMBER = Math.pow(2, currentExponent);
 
             const formattedLimit = STAGE_MAX_NUMBER.toLocaleString();
             
-            // 如果用户输入的值低于 MIN_EXPONENT，则显示实际使用的 N 值
             let displayExp = exp < MIN_EXPONENT ? `${exp} (使用 N=${MIN_EXPONENT})` : exp;
 
             limitDisplay.textContent = ` (上限: ${formattedLimit})`;
@@ -526,7 +516,7 @@
             workerCountInput.value = SYSTEM_CORE_COUNT;
             workerCountInput.oninput = updateWorkerCountInput; 
             exponentInput.value = DEFAULT_EXPONENT; 
-            autoDetectHint.textContent = `(系统检测到 ${SYSTEM_CORE_COUNT} 个核心)`;
+            autoDetectHint.textContent = `(系统检测到 ${SYSTEM_CORE_COUNT} 个线程)`;
             updateWorkerCountInput(); 
             updateLimitDisplay(); 
             updateButtonUI();
@@ -538,7 +528,6 @@
                 currentP: 'N/A',
                 progress: 0
             }));
-            coreCountDisplay.textContent = count;
         }
 
         // --- 计时器和历史记录逻辑 ---
@@ -586,13 +575,13 @@
             chartData.labels.push(cycleNumber);
             chartData.data.push(cycleRunSeconds);
             
-            // 3. 动态刷新图表 (使用 'none' 确保无过渡，解决图表不更新问题)
+            // 3. 动态刷新图表
             if (cycleChart) {
                 cycleChart.update('none'); 
             }
         }
         
-        // --- Worker Script (略，保持不变) ---
+        // --- Worker Script ---
         function getWorkerScript() {
             return `
                 let isWorkerRunning = false;
@@ -801,7 +790,7 @@
                 statusDiv.id = `core-${i}`;
                 statusDiv.innerHTML = `
                     <div class="core-label">
-                        <span>核心 ${i + 1} 检验 p = <span class="core-p-value">N/A</span></span>
+                        <span>线程 ${i} 检验 p = <span class="core-p-value">N/A</span></span>
                         <span class="core-progress-percent">0.00%</span>
                     </div>
                     <div class="progress-bar-container">
@@ -886,7 +875,7 @@
             stage1Primes = []; 
             isStage1Done = false; 
             
-            // **FIX 1:** 图表数据重置 - 通过设置 length=0 来清除数组内容，保留引用
+            // 图表数据重置
             chartData.labels.length = 0;
             chartData.data.length = 0;
             if (cycleChart) {
